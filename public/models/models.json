@@ -1,0 +1,8 @@
+{
+  "$comment": "Drop your .glb/.fbx/.obj files in this folder and point at them here. Keys: player, friend1, friend2, friend3, ghost. Missing or broken files fall back to the placeholder rig, so the game never breaks mid-swap.",
+  "player": "",
+  "friend1": "",
+  "friend2": "",
+  "friend3": "",
+  "ghost": ""
+}
