@@ -16,6 +16,7 @@ import { GameState, CHAPTERS } from './systems/state.js';
 import { StoryDirector } from './systems/story.js';
 import { FLOORS, CORE_CLUES } from './data/map.js';
 import { Minimap } from './world/minimap.js';
+import { TouchControls } from './core/touch.js';
 
 const HOLD_TIME = 0.3;
 
@@ -63,6 +64,7 @@ export class Game {
     this.hidden = false;
     this.monster = null;
     this.story = null;
+    this.touch = new TouchControls(this.input, this);
     this.menuCam = { a: 0 };
     this.fpsT = 0;
     this.fpsN = 0;
@@ -70,8 +72,9 @@ export class Game {
     this.input.onAction = (a) => this.onAction(a);
     this.ui.onOpenChange = (open) => {
       this.player.frozen = open || this.cutscene;
+      this.syncTouchLock();
       if (open) document.exitPointerLock?.();
-      else if (!this.paused && !this.cutscene && this.running && !this.ui.endShown) this.canvas.requestPointerLock?.();
+      else if (!this.input.touch && !this.paused && !this.cutscene && this.running && !this.ui.endShown) this.canvas.requestPointerLock?.();
     };
     this.player.onStep = (sprint) => {
       if (this.cutscene || this.paused) return;
@@ -100,6 +103,13 @@ export class Game {
     this.resize();
     this.player.spawn(FLOORS[0].spawn.x, FLOORS[0].spawn.z, 0, 0);
     this.world.setGateOpen(true);
+    if (TouchControls.shouldEnable()) {
+      this.touch.mount(document.getElementById('ui'));
+      document.body.classList.add('touch');
+    }
+    this.audioResumeOnce = () => {
+      if (!audio.started) audio.resume();
+    };
     this.running = true;
     this.loop();
     this.bindMenu();
@@ -112,7 +122,9 @@ export class Game {
   bindMenu() {
     const start = async (cont) => {
       audio.resume();
+      if (!this.input.touch) await this.canvas.requestPointerLock?.();
       this.ui.showMenu(false);
+      this.syncTouchLock();
       if (cont) this.state.load();
       else GameState.clearSave();
       await this.story.begin(cont);
@@ -232,7 +244,9 @@ export class Game {
     }
     if (a === 'unlock') {
       // lock lost (Esc / tab-out). Pause unless a menu or a reading panel owns
-      // the mouse, or a cutscene is holding the camera.
+      // the mouse, or a cutscene is holding the camera, or we are on touch
+      // (where there is no pointer lock at all by design).
+      if (this.input.touch) return;
       if (!this.running || this.paused || this.cutscene || this.ui.endShown) return;
       if (this.ui.el.menu && !this.ui.el.menu.classList.contains('hidden')) return;
       if (!this.ui.el.modal.classList.contains('hidden')) return;
@@ -296,6 +310,7 @@ export class Game {
         break;
       }
       case 'KeyJ':
+      case 'KeyI': // both spellings work; the keyboard layout note says J
         this.story?.openJournal();
         break;
       case 'KeyK':
@@ -310,15 +325,30 @@ export class Game {
     }
   }
 
+  /** hide the on-screen controls whenever a menu/panel owns the screen, so a
+   *  tap goes to the button and not to the look-pad */
+  syncTouchLock() {
+    if (!this.input.touch) return;
+    const e = this.ui.el;
+    const blocked =
+      this.paused ||
+      this.ui.endShown ||
+      !e.modal.classList.contains('hidden') ||
+      !(e.menu?.classList.contains('hidden') ?? true);
+    document.body.classList.toggle('no-touch', blocked);
+  }
+
   setPaused(p) {
     this.paused = p;
     this.input.enabled = !p;
+    this.syncTouchLock();
     if (p) {
       document.exitPointerLock?.();
       this.ui.showPause(true, CHAPTERS);
     } else {
       this.ui.showPause(false);
       if (!this.ui.el.modal.classList.contains('hidden')) return;
+      if (this.input.touch) return;
       this.canvas.requestPointerLock?.();
     }
   }
@@ -438,19 +468,19 @@ export class Game {
       this.camera.rotation.set(this.player.pitch * 0.5, this.player.yaw, 0, 'YXZ');
     }
 
-    if (!this.cutscene && this.input.locked && this.ui.el.modal.classList.contains('hidden')) {
+    if (!this.cutscene && this.input.looking && this.ui.el.modal.classList.contains('hidden')) {
       const it = this.findTarget();
       this.target = it;
       const prompt = this.promptFor(it);
       if (it && prompt) {
         if (this.hold.id !== it.id) this.hold = { id: it.id, t: 0 };
         this.hold.t += dt;
-        this.ui.setPrompt(prompt, clamp(this.hold.t / HOLD_TIME, 0, 1), 'E');
+        this.ui.setPrompt(prompt, clamp(this.hold.t / HOLD_TIME, 0, 1), this.input.touch ? 'USE' : 'E');
       } else {
         this.hold = { id: null, t: 0 };
         this.ui.setPrompt(null);
       }
-    } else if (!this.input.locked) {
+    } else if (!this.input.looking) {
       this.ui.setPrompt(null);
       this.target = null;
     }

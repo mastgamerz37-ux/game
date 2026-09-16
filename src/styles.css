@@ -257,3 +257,41 @@ code { background: rgba(255,255,255,.07); padding: 1px 5px; border-radius: 4px; 
   color: #7d8ea3; background: rgba(4,7,10,.6); border: 1px solid rgba(160,180,210,.14);
   padding: 8px 10px; border-radius: 8px; white-space: pre;
 }
+
+
+/* ------------------------------------------------------------------ touch */
+#touch { position: fixed; inset: 0; pointer-events: none; z-index: 2; }
+body.no-touch #t-pad, body.no-touch #t-stick, body.no-touch #t-btns, body.no-touch #t-menu { opacity: 0; pointer-events: none; }
+#t-menu {
+  position: absolute; right: 3vh; top: 3vh; pointer-events: auto; touch-action: manipulation;
+  font-family: inherit; font-size: 1.5vh; letter-spacing: 0.22em; color: #d8cdb8;
+  background: rgba(12, 12, 14, 0.6); border: 1px solid rgba(220, 200, 170, 0.2); border-radius: 2px; padding: 1.6vh 2vh;
+}
+body.touch #crosshair { display: none; }
+#t-pad { position: absolute; right: 0; top: 0; width: 58%; height: 66%; pointer-events: auto; touch-action: none; }
+#t-stick {
+  position: absolute; left: 3.4vh; bottom: 3.4vh; width: 16vh; height: 16vh; border-radius: 50%;
+  background: radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.05), rgba(0, 0, 0, 0.34));
+  border: 1px solid rgba(220, 200, 170, 0.18); pointer-events: auto; touch-action: none;
+  box-shadow: 0 0 30px rgba(0, 0, 0, 0.5) inset;
+}
+#t-stick i {
+  position: absolute; left: 50%; top: 50%; width: 6.4vh; height: 6.4vh; margin: -3.2vh 0 0 -3.2vh;
+  border-radius: 50%; background: rgba(225, 208, 178, 0.22); border: 1px solid rgba(225, 208, 178, 0.4);
+}
+#t-btns { position: absolute; right: 3vh; bottom: 3vh; display: grid; grid-template-columns: repeat(2, 1fr); gap: 1.3vh; }
+#t-btns button {
+  pointer-events: auto; -webkit-tap-highlight-color: transparent; touch-action: manipulation;
+  font-family: inherit; font-size: 1.6vh; letter-spacing: 0.2em; color: #e6dcc8;
+  background: rgba(12, 12, 14, 0.62); border: 1px solid rgba(220, 200, 170, 0.22); border-radius: 2px;
+  padding: 2vh 2.4vh; cursor: pointer;
+}
+#t-btns button:active { background: rgba(220, 200, 170, 0.2); }
+#t-btns button.big { grid-column: span 2; color: #e8e0cf; border-color: rgba(220, 200, 170, 0.45); padding: 2.6vh; font-size: 2vh; }
+#t-btns button.on { background: rgba(220, 200, 170, 0.24); color: #e8e0cf; }
+@media (max-width: 780px) {
+  #ui .modal .card { padding: 2.2rem 1.8rem; }
+  #ui .modal h2 { font-size: 2.2rem; }
+  .beats p { font-size: 1.25rem; }
+  #subtitle { font-size: 1.05rem; margin: 0 6vw 14vh; }
+}

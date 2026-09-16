@@ -26,6 +26,8 @@ export class Input {
     this.delta = { x: 0, y: 0 };
     this.locked = false;
     this.enabled = true;
+    this.touch = false; // set by TouchControls: no pointer lock needed
+    this.virtual = null; // {x,z} from the on-screen stick
     this.sensitivity = 0.0022;
     this.actions = new Set();
     this.onAction = null; // (name) => void
@@ -33,6 +35,7 @@ export class Input {
     window.addEventListener('keydown', (e) => this.keydown(e), { passive: false });
     window.addEventListener('keyup', (e) => this.keyup(e));
     canvas.addEventListener('mousedown', (e) => {
+      if (this.touch) { if (e.button === 0) this.fire('KeyE'); return; }
       if (!this.locked && this.enabled) canvas.requestPointerLock?.();
       else if (e.button === 0) this.fire('click');
     });
@@ -71,7 +74,9 @@ export class Input {
       e.preventDefault();
       return;
     }
-    if (['Escape', 'KeyE', 'KeyF', 'KeyI', 'KeyV', 'KeyT', 'KeyH', 'KeyM', 'KeyP', 'Enter', 'Space'].includes(e.code)) {
+    if (
+      ['Escape', 'KeyE', 'KeyF', 'KeyI', 'KeyJ', 'KeyK', 'KeyV', 'KeyT', 'KeyH', 'KeyM', 'KeyP', 'Enter', 'Space'].includes(e.code)
+    ) {
       if (e.code === 'Escape' && this.locked) {
         document.exitPointerLock?.();
         return;
@@ -88,10 +93,27 @@ export class Input {
     this.held[e.code] = false;
   }
 
+  /**
+   * Move vector in camera space: x>0 = strafe right, z>0 = walk forward
+   * (away from the camera). The controller turns this into world space.
+   */
   axis() {
-    const x = (this.held.right ? 1 : 0) - (this.held.left ? 1 : 0);
-    const z = (this.held.back ? 1 : 0) - (this.held.forward ? 1 : 0);
+    let x = (this.held.right ? 1 : 0) - (this.held.left ? 1 : 0);
+    let z = (this.held.forward ? 1 : 0) - (this.held.back ? 1 : 0);
+    if (this.virtual) {
+      // analogue: magnitude carries the lean, and a dead zone keeps idle drift out
+      const mag = Math.hypot(this.virtual.x, this.virtual.z);
+      if (mag > 0.14) {
+        x = this.virtual.x;
+        z = this.virtual.z;
+      }
+    }
     return { x, z };
+  }
+
+  /** true when the player can look around (mouse capture or a finger on the pad) */
+  get looking() {
+    return this.locked || this.touch;
   }
 
   consumeLook() {

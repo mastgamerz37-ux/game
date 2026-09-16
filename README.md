@@ -135,7 +135,9 @@ Two offline validators keep the map honest while you edit it:
 node tools/walk.mjs --all    # 26 routes: can the player physically get there?
 node tools/anchors.mjs       # every clue/door/stair has standable, reachable ground
 node tools/worldcheck.mjs    # the level is ONE connected region once doors open
-npm run check               # all three at once
+node tools/cam.mjs           # third-person arm never sits inside a wall + touch axis
+node tools/simulate.mjs      # plays all 5 chapters headless (puzzles, chase, endings)
+npm run check              # the four above in one go
 ```
 
 ---
@@ -144,7 +146,7 @@ npm run check               # all three at once
 
 | | |
 | --- | --- |
-| `W A S D` / arrows | move |
+| `W A S D` / arrows | move (a diagonal is not faster than a straight line) |
 | `Shift` | sprint (has a breath meter — the monster does not get tired) |
 | `C` | crouch (quieter, less scary) |
 | mouse | look · `E` / `Space` interact · `Esc` pause |
@@ -157,6 +159,18 @@ npm run check               # all three at once
 Headphones. Lights off. Pointer lock is required for mouse-look — click the
 canvas if the browser ate it.
 
+### Touch / phone
+
+On a coarse pointer (phone, tablet, some laptops) the game mounts an on-screen
+rig automatically: left thumb stick (analogue — how hard you push is how fast
+Arjun walks), right half of the screen to look, and `USE / TORCH / VIEW /
+NOTES / RUN / SIT / MUTE` plus a `MENU` button. A tap on the world itself is
+the same as `E`. The controls vanish whenever a panel or the pause menu is open,
+so taps land on the panel instead.
+
+Force it on with `?touch=1`, off with `?touch=0`. No pointer lock is used in
+touch mode, so nothing pauses when the browser "loses" the cursor.
+
 ---
 
 ## Code layout
@@ -168,6 +182,7 @@ src/
   utils.js             canvas-texture helpers, chalk text, easing, RNG
   core/
     input.js           pointer-lock mouse-look + keys, enable/disable gate
+    touch.js           on-screen stick + look-pad + action buttons (writes into Input)
     audio.js           every sound synthesised (creaks, whispers, PA announcement, stingers)
     collision.js       AABB slide movement + BFS flow field for the monster
   data/
@@ -207,8 +222,13 @@ offers **CONTINUE** / **ERASE SAVE**.
 
 ## Known edges
 
-* Third-person camera does not avoid walls yet (it clips through geometry in
-  tight doorways) — first person is the intended way to play.
+* Third-person avoids walls by shortening the camera arm (22 samples against
+  the level's AABBs, smoothed so it never snaps). It does not *push* sideways,
+  so in a doorway you may see the wall for a frame. First person is still the
+  intended way to play.
+* Touch has no analogue for mouse-sensitivity tuning or for hover tooltips:
+  interaction targets are picked by where the camera points, so a imprecise
+  thumb means pointing Arjun's nose at things.
 * `?debug=1` shows the chapter-jump list in the pause menu; use it to test
   chapters in isolation, and note that `jumpToChapter` grants the keys a chapter
   assumes you already found.

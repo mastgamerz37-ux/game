@@ -8,7 +8,7 @@
     "dev": "vite --host 0.0.0.0 --port 5173 --strictPort",
     "build": "vite build",
     "preview": "vite preview --host 0.0.0.0 --port 4173 --strictPort",
-    "check": "node tools/walk.mjs --all && node tools/anchors.mjs && node tools/simulate.mjs"
+    "check": "node tools/walk.mjs --all && node tools/anchors.mjs && node tools/cam.mjs && node tools/simulate.mjs"
   },
   "dependencies": {
     "three": "^0.169.0",

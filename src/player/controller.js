@@ -11,6 +11,18 @@ import { EYE_HEIGHT, CROUCH_HEIGHT, PLAYER_RADIUS, PLAYER_SPEED, PLAYER_SPRINT, 
 import { moveWithCollision, pointFree } from '../core/collision.js';
 import { damp, clamp } from '../utils.js';
 
+/** cheap 3D-ish occlusion test for the third-person camera arm */
+function camBlocked(x, y, z, boxes) {
+  const R = 0.26;
+  for (const b of boxes) {
+    if (b.dynamic && b.active === false) continue;
+    if (x <= b.minx - R || x >= b.maxx + R || z <= b.minz - R || z >= b.maxz + R) continue;
+    const top = b.h !== undefined ? b.h : 1.9;
+    if (y < top) return true;
+  }
+  return false;
+}
+
 export class PlayerController {
   constructor(camera, input, world) {
     this.camera = camera;
@@ -72,7 +84,7 @@ export class PlayerController {
 
   update(dt, t) {
     const input = this.input;
-    if (!this.frozen && input.locked) {
+    if (!this.frozen && input.looking) {
       const look = input.consumeLook();
       this.yaw -= look.x;
       this.pitch -= look.y;
@@ -80,21 +92,28 @@ export class PlayerController {
     } else {
       input.consumeLook();
     }
-
+    // the virtual stick is already normalised, so only clamp keys to 1
     // ---- movement ---------------------------------------------------------
-    const ax = input.enabled && !this.frozen ? input.axis() : { x: 0, z: 0 };
-    const len = Math.hypot(ax.x, ax.z) || 1;
-    const wantSprint = !!input.held.sprint && !this.crouching && (ax.x || ax.z);
-    this.crouching = !!input.held.crouch;
+    const raw = this.input.enabled && !this.frozen ? this.input.axis() : { x: 0, z: 0 };
+    const crouch = !!this.input.held.crouch;
+    const dx0 = clamp(raw.x, -1, 1);
+    const dz0 = clamp(raw.z, -1, 1);
+    const mag = Math.hypot(dx0, dz0);
+
+    this.crouching = crouch;
+    const wantSprint = !!this.input.held.sprint && !crouch && mag > 0.2;
     this.sprinting = wantSprint && this.stamina > 0.02;
     this.stamina = clamp(this.stamina + (this.sprinting ? -dt * 0.28 : dt * 0.22), 0, 1);
 
     const speed = (this.sprinting ? PLAYER_SPRINT : this.crouching ? PLAYER_SPEED * 0.45 : PLAYER_SPEED) * (this.locked ? 0 : 1);
-    const mag = Math.hypot(ax.x, ax.z);
-    const s = mag > 0.0001 ? speed / mag : 0;
+    // keyboard input is digital (normalise diagonals); the touch stick is
+    // analogue, so a half-push walks and a full-push runs at the same ratio
+    const dx = mag > 1 ? dx0 / mag : dx0;
+    const dz = mag > 1 ? dz0 / mag : dz0;
+    const scale = speed * (mag > 1 ? 1 : Math.min(1, mag));
     // yaw 0 faces -z; strafe right is +x
-    const mx = (ax.z * -Math.sin(this.yaw) + ax.x * Math.cos(this.yaw)) * s;
-    const mz = (ax.z * -Math.cos(this.yaw) - ax.x * Math.sin(this.yaw)) * s;
+    const mx = (dz * -Math.sin(this.yaw) + dx * Math.cos(this.yaw)) * scale;
+    const mz = (dz * -Math.cos(this.yaw) - dx * Math.sin(this.yaw)) * scale;
 
     const moving = Math.hypot(mx, mz) > 0.001;
     const level = this.world.levels[this.world.levelIndex];
@@ -143,10 +162,29 @@ export class PlayerController {
       cam.rotation.y += Math.sin(t * bobRate * 0.5) * bobX * 0.06;
     } else {
       this.modelSlot.visible = true;
-      const dist = this.thirdPersonDist;
-      const cx = this.pos.x - Math.sin(this.yaw) * dist * Math.cos(this.pitch);
-      const cz = this.pos.z - Math.cos(this.yaw) * dist * Math.cos(this.pitch);
-      const cy = this.pos.y + this.height + 0.5 + Math.sin(this.pitch) * dist;
+      // walk the camera arm backwards from the head and stop before anything
+      // solid, so third person never buries itself in a wall or a doorframe
+      const want = this.thirdPersonDist;
+      const headY = this.pos.y + this.height;
+      const dirX = -Math.sin(this.yaw) * Math.cos(this.pitch);
+      const dirZ = -Math.cos(this.yaw) * Math.cos(this.pitch);
+      const dirY = Math.sin(this.pitch);
+      let dist = want;
+      const steps = 22;
+      for (let i = 1; i <= steps; i++) {
+        const d = (i / steps) * want;
+        const px = this.pos.x - dirX * d;
+        const pz = this.pos.z - dirZ * d;
+        const py = headY + 0.45 + dirY * d;
+        if (camBlocked(px, py, pz, boxes)) {
+          dist = Math.max(0.85, ((i - 1) / steps) * want);
+          break;
+        }
+      }
+      this.camDist = damp(this.camDist || want, dist, 16, dt);
+      const cx = this.pos.x - dirX * this.camDist;
+      const cz = this.pos.z - dirZ * this.camDist;
+      const cy = headY + 0.45 + dirY * this.camDist;
       cam.position.set(cx, cy, cz);
       cam.rotation.set(this.pitch * 0.5, this.yaw, 0, 'YXZ');
       this.modelSlot.position.set(this.pos.x, this.pos.y, this.pos.z);
